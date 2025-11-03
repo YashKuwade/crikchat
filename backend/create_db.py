@@ -15,11 +15,30 @@ engine = create_engine(SQLITE_URL, connect_args={"check_same_thread": False}, ec
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
+def safe_int(value, default=0):
+    """Safely convert a value to int, removing commas and handling errors."""
+    if value is None or value == "":
+        return default
+    try:
+        # Remove commas and convert to int
+        cleaned = str(value).strip().replace(",", "")
+        return int(float(cleaned))
+    except (ValueError, TypeError):
+        return default
+
 class Player(Base):
     __tablename__ = "players"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     runs = Column(Integer, nullable=False)
+    country = Column(String, nullable=False)
+    balls = Column(Integer, nullable=False)
+    wickets = Column(Integer, nullable=False)
+    sixes = Column(Integer, nullable=False)
+    fours = Column(Integer, nullable=False)
+    matches = Column(Integer, nullable=False)
+    fifties = Column(Integer, nullable=False)
+    centuries = Column(Integer, nullable=False)
 
 def load_csv_to_db():
     if not CSV_PATH.exists():
@@ -34,16 +53,12 @@ def load_csv_to_db():
         if not headers:
             raise RuntimeError("CSV has no headers")
 
-        name_col = "player"
-        runs_col = "runs"
-
         # collect last-seen value for duplicate names
         mapping = {}
         total = skipped = 0
         for row in reader:
             total += 1
-            raw_name = row.get(name_col, "")
-            raw_runs = row.get(runs_col, "")
+            raw_name = row.get("player", "")
             if not raw_name:
                 skipped += 1
                 continue
@@ -51,25 +66,44 @@ def load_csv_to_db():
             if not name:
                 skipped += 1
                 continue
-            runs_str = str(raw_runs).strip().replace(",", "")
-            try:
-                runs_int = int(float(runs_str))
-            except Exception:
-                skipped += 1
-                continue
-            mapping[name] = runs_int
+            
+            player_data = {
+                "name": name,
+                "runs": safe_int(row.get("runs")),
+                "country": row.get("country", "").strip() or "Unknown",
+                "balls": safe_int(row.get("balls")),
+                "wickets": safe_int(row.get("wickets")),
+                "sixes": safe_int(row.get("sixes")),
+                "fours": safe_int(row.get("fours")),
+                "matches": safe_int(row.get("matches")),
+                "fifties": safe_int(row.get("fifties")),
+                "centuries": safe_int(row.get("centuries"))
+            }
+            mapping[name] = player_data
 
     # insert into DB (last-seen mapping)
     db = SessionLocal()
     try:
-        for name, runs_int in mapping.items():
+        for name, player_data in mapping.items():
             # upsert-like behavior (simple): try update else insert
             existing = db.query(Player).filter(Player.name == name).first()
             if existing:
-                existing.runs = runs_int
+                existing.runs = player_data["runs"]
+                existing.country = player_data["country"]
+                existing.balls = player_data["balls"]
+                existing.wickets = player_data["wickets"]
+                existing.sixes = player_data["sixes"]
+                existing.fours = player_data["fours"]
+                existing.matches = player_data["matches"]
+                existing.fifties = player_data["fifties"]
+                existing.centuries = player_data["centuries"]
             else:
-                db.add(Player(name=name, runs=runs_int))
+                db.add(Player(**player_data))
         db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error during database operation: {e}")
+        raise
     finally:
         db.close()
 
