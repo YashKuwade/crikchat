@@ -21,25 +21,25 @@ def match2match_to_global_bat():
             for kind in batter_dict:
                 if kind in {"innings", "highest_score", "fifties", "centuries", "one_fifties", "double_centuries", "ducks"}: 
                     continue
-                elif kind == "balls":
-                    for player in m_data[kind]:
+                if kind == "balls":
+                    for player in m_data["balls"]:
                         batter_dict["innings"][player] += 1
-                elif kind == "runs":
-                    for player in m_data[kind]:
+                if kind == "runs":
+                    for player in m_data["runs"]:
                         batter_dict["highest_score"][player] = max(m_data["runs"][player], batter_dict["highest_score"][player])
-                    if m_data["runs"][player] >= 200:
-                        batter_dict["double_centuries"][player] += 1
-                    if m_data["runs"][player] >= 150:
-                        batter_dict["one_fifties"][player] += 1
-                    if m_data["runs"][player] >= 100:
-                        batter_dict["centuries"][player] += 1
-                    if m_data["runs"][player] >= 50:
-                        batter_dict["fifties"][player] += 1
-                    if m_data["runs"][player] == 0:
-                        batter_dict["ducks"][player] += 1
-                else:
-                    for player in m_data[kind]:
-                        batter_dict[kind][player] += m_data[kind][player]
+                        if m_data["runs"][player] >= 200:
+                            batter_dict["double_centuries"][player] += 1
+                        if m_data["runs"][player] >= 150:
+                            batter_dict["one_fifties"][player] += 1
+                        if m_data["runs"][player] >= 100:
+                            batter_dict["centuries"][player] += 1
+                        if m_data["runs"][player] >= 50:
+                            batter_dict["fifties"][player] += 1
+                        if m_data["runs"][player] == 0:
+                            batter_dict["ducks"][player] += 1
+                
+                for player in m_data[kind]:
+                    batter_dict[kind][player] += m_data[kind][player]
     
     with open(os.getcwd() + '\\..\\output\\json_output\\batter_agg.json', 'w') as f:
         json.dump(batter_dict, f)
@@ -72,7 +72,9 @@ def global_bat2csv():
     final = reduce(lambda left, right: pd.merge(left, right, on="player", how='left'), dataframes)
     final["country"] = final["player"].apply(lambda x: x.split("|")[1])
     final["player"] = final["player"].apply(lambda x: x.split("|")[0])
+    final = final.fillna(0)
     final.to_csv(os.getcwd() + '\\..\\output\\tabular\\batter_agg.csv', index=False)
+    final.to_parquet(os.getcwd() + '\\..\\output\\tabular\\batter_agg.parquet')
 
 if __name__ == '__main__':
     global_bat2csv()
