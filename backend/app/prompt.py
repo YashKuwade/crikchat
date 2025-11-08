@@ -1,6 +1,7 @@
 db_schema = """
+Table name: players
 Available columns:
-- player: player name, example: Virat Kohli will be V Kohli
+- name: player name, example: Virat Kohli will be V Kohli
 - country: player country
 - balls: balls played
 - wickets: total times out

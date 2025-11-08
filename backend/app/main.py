@@ -6,11 +6,15 @@ from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from pathlib import Path
 from prompt import db_schema
 from schemas import PlayerRequest, PlayerResponse, NLAskRequest, NLAskResponse
+from google import genai
+import yaml
 
 # Paths (adjust if needed)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = REPO_ROOT / "players.db"
 SQLITE_URL = f"sqlite:///{DB_PATH}"
+creds = yaml.safe_load(open('./../../secrets.yml'))
+GEMINI_KEY = creds['GEMINI_KEY']
 
 # SQLAlchemy setup (local dev friendly)
 engine = create_engine(SQLITE_URL, connect_args={"check_same_thread": False}, echo=False)
@@ -23,6 +27,14 @@ class Player(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     runs = Column(Integer, nullable=False)
+    country = Column(String, nullable=False)
+    balls = Column(Integer, nullable=False)
+    wickets = Column(Integer, nullable=False)
+    sixes = Column(Integer, nullable=False)
+    fours = Column(Integer, nullable=False)
+    matches = Column(Integer, nullable=False)
+    fifties = Column(Integer, nullable=False)
+    centuries = Column(Integer, nullable=False)
 
 # create tables if missing (safe; no-op if exists)
 Base.metadata.create_all(bind=engine)
@@ -65,7 +77,7 @@ def get_user_answer(req: NLAskRequest, db: Session = Depends(get_db)):
     
     # text to sql
     # create client
-    client = ""
+    client = genai.Client(api_key=GEMINI_KEY)
 
     # create the prompt
     prompt = f"""given the data schema:
@@ -74,14 +86,18 @@ def get_user_answer(req: NLAskRequest, db: Session = Depends(get_db)):
 Convert this natural language query to SQL:
 "{query}"
 
+START YOUR RESPONSE WITH THE QUERY DIRECTLY, WITHOUT ANY CODE BLOCK DELIMITERS (e.g. sql)
 you must ONLY return valid SQL SELECT statements, nothing else.
 Use SQLite syntax.
 IMPORTANT: Only return SELECT statement, never INSERT/UPDATE/DELETE/DROP.
-
     """
     # convert to sql
-    sql_query = client.models.generate_content()
-    sql_query = sql_query.content[0].text.strip()
+    sql_query = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+    sql_query = sql_query.text.strip()
+    # print(prompt, sql_query)
     
     # validate the sql
     sql_upper = sql_query.upper().strip()
@@ -109,21 +125,28 @@ IMPORTANT: Only return SELECT statement, never INSERT/UPDATE/DELETE/DROP.
         results = [dict(zip(columns, row)) for row in rows]
         
         # Generate interpretation
-        interpretation_prompt = f"""The user asked: "{query}"
+        interpretation_prompt = f"""The user asked: {query}
 We executed this SQL: {sql_query}
 We got {len(results)} results.
 
 Provide a brief, natural language summary of what we found."""
         
-        interp_message = client.messages.create()
-        
-        interpretation = interp_message.content[0].text.strip()
-        
         return NLAskResponse(
-            sql=sql_query,
-            results=results,
-            interpretation=interpretation
+            columns=columns,
+            rows=results,
+            row_count=len(results),
+            sql=sql_query
+            visualization_hint='bar'
         )
+        # interp_message = client.messages.create()
+        
+        # interpretation = interp_message.content[0].text.strip()
+        
+        # return NLAskResponse(
+        #     sql=sql_query,
+        #     results=results,
+        #     interpretation=interpretation
+        # )
     
     except Exception as e:
         raise HTTPException(
