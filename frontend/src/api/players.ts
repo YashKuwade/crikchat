@@ -2,7 +2,8 @@
 export type QueryResponse = {
   columns: string[]
   rows: Record<string, any>[]
-  row_count: []   // unified naming
+  row_count: []
+  visualization_hint: string
   sql?: string
 }
 

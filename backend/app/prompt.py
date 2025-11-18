@@ -12,3 +12,5 @@ Available columns:
 - fifties: fifties scored
 - centuries: centuries scored
 """
+
+supported_charts = "('bar plot', 'line plot', 'pie chart')"

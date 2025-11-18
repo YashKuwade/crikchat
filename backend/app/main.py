@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, text
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from pathlib import Path
-from prompt import db_schema
+from prompt import db_schema, supported_charts
 from schemas import PlayerRequest, PlayerResponse, NLAskRequest, NLAskResponse
 from google import genai
 import yaml
@@ -122,31 +122,42 @@ IMPORTANT: Only return SELECT statement, never INSERT/UPDATE/DELETE/DROP.
         
         # Convert to list of dicts
         columns = result.keys()
-        results = [dict(zip(columns, row)) for row in rows]
+        results = [dict(zip(columns, row)) for row in rows][:10] # limit to a maximum of 10 rows
         
-        # Generate interpretation
-        interpretation_prompt = f"""The user asked: {query}
-We executed this SQL: {sql_query}
-We got {len(results)} results.
+        # # Generate interpretation
+        # interpretation_prompt = f"""The user asked: {query}
+        # We executed this SQL: {sql_query}
+        # We got following results: {results}
 
-Provide a brief, natural language summary of what we found."""
+        # Provide a brief, natural language summary of what we found."""
         
+        # interp_message = client.messages.create()
+        
+        # interpretation = interp_message.content[0].text.strip()
+
+        # Generate Viz Hint
+        # viz_prompt = f"""We have this sql query: {sql_query}
+        
+        # Select one from {supported_charts} as the most appropriate chart to represent data fetched from this query.
+        # Only return the answer and NOTHING else. Return 'undecided' in case there is no clear answer."""
+        
+        # viz_hint = client.models.generate_content(
+        #     model="gemini-2.5-flash",
+        #     contents=viz_prompt)
+        # viz_hint = viz_hint.text.strip()
+        # # return NLAskResponse(
+        # #     sql=sql_query,
+        # #     results=results,
+        # #     interpretation=interpretation
+        # # )
+
         return NLAskResponse(
             columns=columns,
             rows=results,
             row_count=len(results),
+            visualization_hint='bar plot',
             sql=sql_query
-            visualization_hint='bar'
         )
-        # interp_message = client.messages.create()
-        
-        # interpretation = interp_message.content[0].text.strip()
-        
-        # return NLAskResponse(
-        #     sql=sql_query,
-        #     results=results,
-        #     interpretation=interpretation
-        # )
     
     except Exception as e:
         raise HTTPException(
